@@ -12,37 +12,73 @@ package com.nepxion.discovery.plugin.strategy.service.aop;
 import feign.RequestInterceptor;
 import feign.RequestTemplate;
 
+import java.util.Collection;
 import java.util.Enumeration;
+import java.util.List;
+import java.util.Map;
 
 import javax.servlet.http.HttpServletRequest;
 
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
-public class FeignStrategyInterceptor implements RequestInterceptor {
+import com.nepxion.discovery.common.constant.DiscoveryConstant;
+import com.nepxion.discovery.plugin.strategy.service.adapter.FeignStrategyInterceptorAdapter;
+import com.nepxion.discovery.plugin.strategy.service.route.ServiceStrategyRouteFilter;
+
+public class FeignStrategyInterceptor extends AbstractStrategyInterceptor implements RequestInterceptor {
     private static final Logger LOG = LoggerFactory.getLogger(FeignStrategyInterceptor.class);
 
-    private String requestHeaders;
+    @Autowired(required = false)
+    private List<FeignStrategyInterceptorAdapter> feignStrategyInterceptorAdapterList;
+
+    @Autowired
+    private ServiceStrategyRouteFilter serviceStrategyRouteFilter;
 
     public FeignStrategyInterceptor(String requestHeaders) {
-        this.requestHeaders = requestHeaders.toLowerCase();
+        super(requestHeaders);
 
-        LOG.info("------------- Feign Proxy Information -----------");
-        LOG.info("Feign interceptor headers are '{}'", requestHeaders);
-        LOG.info("-------------------------------------------------");
+        LOG.info("----------- Feign Intercept Information ----------");
+        LOG.info("Feign desires to intercept customer headers are {}", requestHeaderList);
+        LOG.info("--------------------------------------------------");
     }
 
     @Override
     public void apply(RequestTemplate requestTemplate) {
-        ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        interceptInputHeader();
+
+        applyInnerHeader(requestTemplate);
+        applyOuterHeader(requestTemplate);
+
+        interceptOutputHeader(requestTemplate);
+
+        if (CollectionUtils.isNotEmpty(feignStrategyInterceptorAdapterList)) {
+            for (FeignStrategyInterceptorAdapter feignStrategyInterceptorAdapter : feignStrategyInterceptorAdapterList) {
+                feignStrategyInterceptorAdapter.apply(requestTemplate);
+            }
+        }
+    }
+
+    private void applyInnerHeader(RequestTemplate requestTemplate) {
+        requestTemplate.header(DiscoveryConstant.N_D_SERVICE_TYPE, pluginAdapter.getServiceType());
+        requestTemplate.header(DiscoveryConstant.N_D_SERVICE_ID, pluginAdapter.getServiceId());
+        requestTemplate.header(DiscoveryConstant.N_D_SERVICE_ADDRESS, pluginAdapter.getHost() + ":" + pluginAdapter.getPort());
+        requestTemplate.header(DiscoveryConstant.N_D_SERVICE_GROUP, pluginAdapter.getGroup());
+        requestTemplate.header(DiscoveryConstant.N_D_SERVICE_VERSION, pluginAdapter.getVersion());
+        requestTemplate.header(DiscoveryConstant.N_D_SERVICE_REGION, pluginAdapter.getRegion());
+    }
+
+    private void applyOuterHeader(RequestTemplate requestTemplate) {
+        ServletRequestAttributes attributes = serviceStrategyContextHolder.getRestAttributes();
         if (attributes == null) {
             return;
         }
 
         HttpServletRequest previousRequest = attributes.getRequest();
-
         Enumeration<String> headerNames = previousRequest.getHeaderNames();
         if (headerNames == null) {
             return;
@@ -50,11 +86,62 @@ public class FeignStrategyInterceptor implements RequestInterceptor {
 
         while (headerNames.hasMoreElements()) {
             String headerName = headerNames.nextElement();
-            String header = previousRequest.getHeader(headerName);
-
-            if (requestHeaders.contains(headerName.toLowerCase())) {
-                requestTemplate.header(headerName, header);
+            String headerValue = previousRequest.getHeader(headerName);
+            boolean isHeaderContains = isHeaderContainsExcludeInner(headerName.toLowerCase());
+            if (isHeaderContains) {
+                requestTemplate.header(headerName, headerValue);
             }
         }
+
+        Map<String, Collection<String>> headers = requestTemplate.headers();
+        if (CollectionUtils.isEmpty(headers.get(DiscoveryConstant.N_D_VERSION))) {
+            String routeVersion = serviceStrategyRouteFilter.getRouteVersion();
+            if (StringUtils.isNotEmpty(routeVersion)) {
+                requestTemplate.header(DiscoveryConstant.N_D_VERSION, routeVersion);
+            }
+        }
+        if (CollectionUtils.isEmpty(headers.get(DiscoveryConstant.N_D_REGION))) {
+            String routeRegion = serviceStrategyRouteFilter.getRouteRegion();
+            if (StringUtils.isNotEmpty(routeRegion)) {
+                requestTemplate.header(DiscoveryConstant.N_D_REGION, routeRegion);
+            }
+        }
+        if (CollectionUtils.isEmpty(headers.get(DiscoveryConstant.N_D_ADDRESS))) {
+            String routeAddress = serviceStrategyRouteFilter.getRouteAddress();
+            if (StringUtils.isNotEmpty(routeAddress)) {
+                requestTemplate.header(DiscoveryConstant.N_D_ADDRESS, routeAddress);
+            }
+        }
+        if (CollectionUtils.isEmpty(headers.get(DiscoveryConstant.N_D_VERSION_WEIGHT))) {
+            String routeVersionWeight = serviceStrategyRouteFilter.getRouteVersionWeight();
+            if (StringUtils.isNotEmpty(routeVersionWeight)) {
+                requestTemplate.header(DiscoveryConstant.N_D_VERSION_WEIGHT, routeVersionWeight);
+            }
+        }
+        if (CollectionUtils.isEmpty(headers.get(DiscoveryConstant.N_D_REGION_WEIGHT))) {
+            String routeRegionWeight = serviceStrategyRouteFilter.getRouteRegionWeight();
+            if (StringUtils.isNotEmpty(routeRegionWeight)) {
+                requestTemplate.header(DiscoveryConstant.N_D_REGION_WEIGHT, routeRegionWeight);
+            }
+        }
+    }
+
+    private void interceptOutputHeader(RequestTemplate requestTemplate) {
+        if (!interceptDebugEnabled) {
+            return;
+        }
+
+        System.out.println("------- Intercept Output Header Information ------");
+        Map<String, Collection<String>> headers = requestTemplate.headers();
+        for (Map.Entry<String, Collection<String>> entry : headers.entrySet()) {
+            String headerName = entry.getKey();
+            boolean isHeaderContains = isHeaderContains(headerName.toLowerCase());
+            if (isHeaderContains) {
+                Collection<String> headerValue = entry.getValue();
+
+                System.out.println(headerName + "=" + headerValue);
+            }
+        }
+        System.out.println("--------------------------------------------------");
     }
 }

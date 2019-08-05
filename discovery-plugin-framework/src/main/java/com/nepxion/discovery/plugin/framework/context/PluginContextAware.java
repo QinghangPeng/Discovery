@@ -105,6 +105,14 @@ public class PluginContextAware implements ApplicationContextAware {
         return getConfigPath(environment);
     }
 
+    public String getApplicationName() {
+        return getApplicationName(environment);
+    }
+
+    public String getApplicationType() {
+        return getApplicationType(environment);
+    }
+
     public String getGroupKey() {
         return getGroupKey(environment);
     }
@@ -133,11 +141,19 @@ public class PluginContextAware implements ApplicationContextAware {
         return environment.getProperty(DiscoveryConstant.SPRING_APPLICATION_CONFIG_PATH, String.class, StringUtils.equals(getConfigFormat(environment), DiscoveryConstant.XML_FORMAT) ? DiscoveryConstant.PREFIX_CLASSPATH + DiscoveryConstant.RULE + "." + DiscoveryConstant.XML_FORMAT : DiscoveryConstant.PREFIX_CLASSPATH + DiscoveryConstant.RULE + "." + DiscoveryConstant.JSON_FORMAT);
     }
 
+    public static String getApplicationName(Environment environment) {
+        return environment.getProperty(DiscoveryConstant.SPRING_APPLICATION_NAME);
+    }
+
+    public static String getApplicationType(Environment environment) {
+        return environment.getProperty(DiscoveryConstant.SPRING_APPLICATION_TYPE);
+    }
+
     public static String getGroupKey(Environment environment) {
         return environment.getProperty(DiscoveryConstant.SPRING_APPLICATION_GROUP_KEY, String.class, DiscoveryConstant.GROUP);
     }
 
     public static String getContextPath(Environment environment) {
-        return environment.getProperty(DiscoveryConstant.SPRING_APPLICATION_CONTEXT_PATH, String.class, "/");
+        return environment.getProperty(DiscoveryConstant.CONTEXT_PATH, String.class, "/");
     }
 }

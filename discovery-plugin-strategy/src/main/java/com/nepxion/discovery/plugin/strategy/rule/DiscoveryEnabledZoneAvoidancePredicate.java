@@ -9,8 +9,6 @@ package com.nepxion.discovery.plugin.strategy.rule;
  * @version 1.0
  */
 
-import java.util.Map;
-
 import com.nepxion.discovery.plugin.framework.adapter.PluginAdapter;
 import com.nepxion.discovery.plugin.strategy.adapter.DiscoveryEnabledAdapter;
 import com.netflix.client.config.IClientConfig;
@@ -43,9 +41,11 @@ public class DiscoveryEnabledZoneAvoidancePredicate extends ZoneAvoidancePredica
     }
 
     protected boolean apply(Server server) {
-        Map<String, String> metadata = pluginAdapter.getServerMetadata(server);
+        if (discoveryEnabledAdapter == null) {
+            return true;
+        }
 
-        return discoveryEnabledAdapter.apply(server, metadata);
+        return discoveryEnabledAdapter.apply(server);
     }
 
     public void setPluginAdapter(PluginAdapter pluginAdapter) {

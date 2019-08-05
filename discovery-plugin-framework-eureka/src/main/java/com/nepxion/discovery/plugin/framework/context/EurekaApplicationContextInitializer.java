@@ -20,6 +20,7 @@ import org.springframework.core.env.ConfigurableEnvironment;
 import com.nepxion.discovery.common.constant.DiscoveryConstant;
 import com.nepxion.discovery.plugin.framework.constant.EurekaConstant;
 import com.nepxion.discovery.plugin.framework.decorator.EurekaServiceRegistryDecorator;
+import com.nepxion.discovery.plugin.framework.util.MetadataUtil;
 
 public class EurekaApplicationContextInitializer extends PluginApplicationContextInitializer {
     @Override
@@ -35,12 +36,26 @@ public class EurekaApplicationContextInitializer extends PluginApplicationContex
             eurekaInstanceConfig.setPreferIpAddress(true);
 
             Map<String, String> metadataMap = eurekaInstanceConfig.getMetadataMap();
+            if (!metadataMap.containsKey(DiscoveryConstant.GROUP)) {
+                metadataMap.put(DiscoveryConstant.GROUP, DiscoveryConstant.DEFAULT);
+            }
+            if (!metadataMap.containsKey(DiscoveryConstant.VERSION)) {
+                metadataMap.put(DiscoveryConstant.VERSION, DiscoveryConstant.DEFAULT);
+            }
+            if (!metadataMap.containsKey(DiscoveryConstant.REGION)) {
+                metadataMap.put(DiscoveryConstant.REGION, DiscoveryConstant.DEFAULT);
+            }
+            metadataMap.put(DiscoveryConstant.SPRING_APPLICATION_NAME, PluginContextAware.getApplicationName(environment));
+            metadataMap.put(DiscoveryConstant.SPRING_APPLICATION_TYPE, PluginContextAware.getApplicationType(environment));
             metadataMap.put(DiscoveryConstant.SPRING_APPLICATION_DISCOVERY_PLUGIN, EurekaConstant.DISCOVERY_PLUGIN);
+            metadataMap.put(DiscoveryConstant.SPRING_APPLICATION_DISCOVERY_VERSION, DiscoveryConstant.DISCOVERY_VERSION);
             metadataMap.put(DiscoveryConstant.SPRING_APPLICATION_REGISTER_CONTROL_ENABLED, PluginContextAware.isRegisterControlEnabled(environment).toString());
             metadataMap.put(DiscoveryConstant.SPRING_APPLICATION_DISCOVERY_CONTROL_ENABLED, PluginContextAware.isDiscoveryControlEnabled(environment).toString());
             metadataMap.put(DiscoveryConstant.SPRING_APPLICATION_CONFIG_REST_CONTROL_ENABLED, PluginContextAware.isConfigRestControlEnabled(environment).toString());
             metadataMap.put(DiscoveryConstant.SPRING_APPLICATION_GROUP_KEY, PluginContextAware.getGroupKey(environment));
             metadataMap.put(DiscoveryConstant.SPRING_APPLICATION_CONTEXT_PATH, PluginContextAware.getContextPath(environment));
+
+            MetadataUtil.filter(metadataMap);
 
             return bean;
         } else {

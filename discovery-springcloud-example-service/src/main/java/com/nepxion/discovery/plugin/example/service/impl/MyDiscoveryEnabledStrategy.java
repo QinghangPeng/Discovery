@@ -14,44 +14,44 @@ import java.util.Map;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.beans.factory.annotation.Autowired;
 
-import com.nepxion.discovery.common.constant.DiscoveryConstant;
+import com.nepxion.discovery.plugin.framework.adapter.PluginAdapter;
 import com.nepxion.discovery.plugin.strategy.adapter.DiscoveryEnabledStrategy;
 import com.nepxion.discovery.plugin.strategy.service.constant.ServiceStrategyConstant;
-import com.nepxion.discovery.plugin.strategy.service.context.ServiceStrategyContext;
+import com.nepxion.discovery.plugin.strategy.service.context.ServiceStrategyContextHolder;
 import com.netflix.loadbalancer.Server;
 
-// 实现了组合策略，版本路由策略+区域路由策略+自定义策略
+// 实现了组合策略，版本路由策略+区域路由策略+IP和端口路由策略+自定义策略
 public class MyDiscoveryEnabledStrategy implements DiscoveryEnabledStrategy {
     private static final Logger LOG = LoggerFactory.getLogger(MyDiscoveryEnabledStrategy.class);
 
+    @Autowired
+    private ServiceStrategyContextHolder serviceStrategyContextHolder;
+
+    @Autowired
+    private PluginAdapter pluginAdapter;
+
     @Override
-    public boolean apply(Server server, Map<String, String> metadata) {
-        // 对Rest调用传来的Header参数（例如Token）做策略
-        boolean enabled = applyFromHeader(server, metadata);
+    public boolean apply(Server server) {
+        // 对Rest调用传来的Header参数（例如：token）做策略
+        boolean enabled = applyFromHeader(server);
         if (!enabled) {
             return false;
         }
 
         // 对RPC调用传来的方法参数做策略
-        return applyFromMethod(server, metadata);
+        return applyFromMethod(server);
     }
 
-    // 根据Rest调用传来的Header参数（例如Token），选取执行调用请求的服务实例
-    private boolean applyFromHeader(Server server, Map<String, String> metadata) {
-        ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-        if (attributes == null) {
-            return true;
-        }
+    // 根据Rest调用传来的Header参数（例如：token），选取执行调用请求的服务实例
+    private boolean applyFromHeader(Server server) {
+        String token = serviceStrategyContextHolder.getHeader("token");
+        String serviceId = pluginAdapter.getServerServiceId(server);
+        String version = pluginAdapter.getServerVersion(server);
+        String region = pluginAdapter.getServerRegion(server);
 
-        String token = attributes.getRequest().getHeader("token");
-        // String value = attributes.getRequest().getParameter("value");
-
-        String serviceId = server.getMetaInfo().getAppName().toLowerCase();
-
-        LOG.info("Serivice端负载均衡用户定制触发：serviceId={}, host={}, metadata={}, attributes={}", serviceId, server.toString(), metadata, attributes);
+        LOG.info("负载均衡用户定制触发：token={}, serviceId={}, version={}, region={}", token, serviceId, version, region);
 
         String filterServiceId = "discovery-springcloud-example-c";
         String filterToken = "123";
@@ -66,14 +66,13 @@ public class MyDiscoveryEnabledStrategy implements DiscoveryEnabledStrategy {
 
     // 根据RPC调用传来的方法参数（例如接口名、方法名、参数名或参数值等），选取执行调用请求的服务实例
     @SuppressWarnings("unchecked")
-    private boolean applyFromMethod(Server server, Map<String, String> metadata) {
-        ServiceStrategyContext context = ServiceStrategyContext.getCurrentContext();
-        Map<String, Object> attributes = context.getAttributes();
+    private boolean applyFromMethod(Server server) {
+        Map<String, Object> attributes = serviceStrategyContextHolder.getRpcAttributes();
+        String serviceId = pluginAdapter.getServerServiceId(server);
+        String version = pluginAdapter.getServerVersion(server);
+        String region = pluginAdapter.getServerRegion(server);
 
-        String serviceId = server.getMetaInfo().getAppName().toLowerCase();
-        String version = metadata.get(DiscoveryConstant.VERSION);
-
-        LOG.info("Serivice端负载均衡用户定制触发：serviceId={}, host={}, metadata={}, context={}", serviceId, server.toString(), metadata, context);
+        LOG.info("负载均衡用户定制触发：attributes={}, serviceId={}, version={}, region={}", attributes, serviceId, version, region);
 
         String filterServiceId = "discovery-springcloud-example-b";
         String filterVersion = "1.0";

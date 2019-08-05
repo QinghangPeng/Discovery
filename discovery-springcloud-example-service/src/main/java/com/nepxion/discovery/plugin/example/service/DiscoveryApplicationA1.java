@@ -9,8 +9,7 @@ package com.nepxion.discovery.plugin.example.service;
  * @version 1.0
  */
 
-import java.util.Collections;
-
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
@@ -19,16 +18,22 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.context.annotation.Bean;
 import org.springframework.web.client.RestTemplate;
 
+import com.alibaba.cloud.sentinel.annotation.SentinelRestTemplate;
 import com.nepxion.discovery.plugin.example.service.impl.MyDiscoveryEnabledStrategy;
 import com.nepxion.discovery.plugin.example.service.impl.MyDiscoveryListener;
 import com.nepxion.discovery.plugin.example.service.impl.MyLoadBalanceListener;
 import com.nepxion.discovery.plugin.example.service.impl.MyRegisterListener;
 import com.nepxion.discovery.plugin.example.service.impl.MySubscriber;
+import com.nepxion.discovery.plugin.example.service.sentinel.MyRestTemplateBlockHandler;
+import com.nepxion.discovery.plugin.example.service.sentinel.MyRestTemplateFallbackHandler;
+import com.nepxion.discovery.plugin.example.service.sentinel.MySentinelFlowRuleParser;
 import com.nepxion.discovery.plugin.strategy.service.aop.RestTemplateStrategyInterceptor;
 
 @SpringBootApplication
 @EnableDiscoveryClient
 @EnableFeignClients
+// Hystrix测试
+// @EnableCircuitBreaker
 public class DiscoveryApplicationA1 {
     public static void main(String[] args) {
         System.setProperty("spring.profiles.active", "a1");
@@ -38,11 +43,24 @@ public class DiscoveryApplicationA1 {
 
     @Bean
     @LoadBalanced
-    public RestTemplate restTemplate(RestTemplateStrategyInterceptor restTemplateStrategyInterceptor) {
+    @SentinelRestTemplate(blockHandler = "handleBlock", blockHandlerClass = MyRestTemplateBlockHandler.class, fallback = "handleFallback", fallbackClass = MyRestTemplateFallbackHandler.class)
+    public RestTemplate restTemplate(@Autowired(required = false) RestTemplateStrategyInterceptor restTemplateStrategyInterceptor) {
         RestTemplate restTemplate = new RestTemplate();
-        restTemplate.setInterceptors(Collections.singletonList(restTemplateStrategyInterceptor));
+        if (restTemplateStrategyInterceptor != null) {
+            restTemplate.getInterceptors().add(restTemplateStrategyInterceptor);
+        }
 
         return restTemplate;
+    }
+
+    @Bean
+    public MySentinelFlowRuleParser mySentinelFlowRuleParser() {
+        return new MySentinelFlowRuleParser();
+    }
+
+    @Bean
+    public MyDiscoveryEnabledStrategy myDiscoveryEnabledStrategy() {
+        return new MyDiscoveryEnabledStrategy();
     }
 
     @Bean
@@ -63,10 +81,5 @@ public class DiscoveryApplicationA1 {
     @Bean
     public MySubscriber mySubscriber() {
         return new MySubscriber();
-    }
-
-    @Bean
-    public MyDiscoveryEnabledStrategy myDiscoveryEnabledStrategy() {
-        return new MyDiscoveryEnabledStrategy();
     }
 }
